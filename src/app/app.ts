@@ -208,17 +208,32 @@ export class App implements OnDestroy, OnInit {
               }
               this.isCountingDown.set(false);
               
-              // Cắt file 1 giây 1 lần để nhồi dữ liệu (an toàn hơn cho video dài)
-              this.mediaRecorder!.start(1000); 
+              const startRecordingAction = () => {
+                  // Cắt file 1 giây 1 lần để nhồi dữ liệu (an toàn hơn cho video dài)
+                  this.mediaRecorder!.start(1000); 
+  
+                  this.isRecording.set(true);
+                  this.recordingTime.set(0);
+                  this.timerInterval = setInterval(() => {
+                      this.recordingTime.update(t => t + 1);
+                  }, 1000);
+  
+                  if (hasAudio && this.analyserNode) {
+                      this.updateAudioLevels();
+                  }
+              };
 
-              this.isRecording.set(true);
-              this.recordingTime.set(0);
-              this.timerInterval = setInterval(() => {
-                  this.recordingTime.update(t => t + 1);
-              }, 1000);
-
-              if (hasAudio && this.analyserNode) {
-                  this.updateAudioLevels();
+              if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+                  const utterance = new SpeechSynthesisUtterance('Action');
+                  utterance.lang = 'en-US';
+                  utterance.rate = 1.2;
+                  
+                  utterance.onend = startRecordingAction;
+                  utterance.onerror = startRecordingAction;
+                  
+                  window.speechSynthesis.speak(utterance);
+              } else {
+                  startRecordingAction();
               }
           }
       }, 1000);
