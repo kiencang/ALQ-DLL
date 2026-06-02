@@ -13,7 +13,7 @@ import { ChangeDetectionStrategy, Component, computed, signal, OnDestroy, OnInit
 export class App implements OnDestroy, OnInit {
   isRecording = signal(false);
   isCountingDown = signal(false);
-  countdownValue = signal(3);
+  countdownValue = signal(5);
   recordingTime = signal(0);
   errorMessage = signal('');
   showSuccessToast = signal(false);
@@ -193,9 +193,9 @@ export class App implements OnDestroy, OnInit {
           this.cleanupStreams();
       };
 
-      // Thay vì bắt đầu quay ngay, chúng ta đếm ngược 3 giây
+      // Thay vì bắt đầu quay ngay, chúng ta đếm ngược 5 giây
       this.isCountingDown.set(true);
-      this.countdownValue.set(3);
+      this.countdownValue.set(5);
 
       this.countdownTimerInterval = setInterval(() => {
           const current = this.countdownValue();
