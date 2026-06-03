@@ -9,7 +9,8 @@ import { ChangeDetectionStrategy, Component, computed, signal, OnDestroy, OnInit
   host: {
     '(window:keydown)': 'handleKeydown($event)',
     '(window:mousemove)': 'handleMouseMove($event)',
-    '(window:mouseup)': 'handleMouseUp()'
+    '(window:mouseup)': 'handleMouseUp()',
+    '(window:resize)': 'updateCachedWindowSize()'
   }
 })
 export class App implements OnDestroy, OnInit {
@@ -19,6 +20,9 @@ export class App implements OnDestroy, OnInit {
   isDraggingCam = false;
   dragStart = { x: 0, y: 0 };
   dragInitialPos = { x: 0, y: 0 };
+
+  cachedWindowWidth = 1920;
+  cachedWindowHeight = 1080;
   
   private displayVideoEle: HTMLVideoElement | null = null;
   private canvasEle: HTMLCanvasElement | null = null;
@@ -52,9 +56,17 @@ export class App implements OnDestroy, OnInit {
   private analyserNode: AnalyserNode | null = null;
   private animationFrameId: number | null = null;
 
+  updateCachedWindowSize() {
+      if (typeof window !== 'undefined') {
+          this.cachedWindowWidth = window.innerWidth;
+          this.cachedWindowHeight = window.innerHeight;
+      }
+  }
+
   async ngOnInit() {
       if (typeof window !== 'undefined') {
-          this.cameraPos.set({ x: 20, y: window.innerHeight - 200 }); // default pos
+          this.updateCachedWindowSize();
+          this.cameraPos.set({ x: 20, y: this.cachedWindowHeight - 200 }); // default pos
       }
       if (typeof navigator !== 'undefined' && navigator.mediaDevices) {
           try {
@@ -303,68 +315,98 @@ export class App implements OnDestroy, OnInit {
                   this.displayVideoEle!.play();
                   this.canvasEle = document.createElement('canvas');
                   
-                  this.canvasEle.width = this.displayVideoEle!.videoWidth;
-                  this.canvasEle.height = this.displayVideoEle!.videoHeight;
-                  this.canvasCtx = this.canvasEle!.getContext('2d');
+                  // Cap canvas size at 1080p max resolution to prevent high-DPI performance choke
+                  let targetWidth = this.displayVideoEle!.videoWidth;
+                  let targetHeight = this.displayVideoEle!.videoHeight;
+                  const MAX_RESOLUTION = 1920;
+                  if (targetWidth > MAX_RESOLUTION) {
+                      const scaleFactor = MAX_RESOLUTION / targetWidth;
+                      targetWidth = MAX_RESOLUTION;
+                      targetHeight = Math.round(targetHeight * scaleFactor);
+                  }
+                  
+                  this.canvasEle.width = targetWidth;
+                  this.canvasEle.height = targetHeight;
+                  
+                  // Create non-alpha canvas context for heavy CPU/GPU memory saving
+                  this.canvasCtx = this.canvasEle!.getContext('2d', { alpha: false });
+                  if (this.canvasCtx) {
+                      this.canvasCtx.imageSmoothingEnabled = true;
+                      this.canvasCtx.imageSmoothingQuality = 'medium';
+                  }
                   resolve();
               };
           });
 
-          const camVideoEl = document.getElementById('camPreview') as HTMLVideoElement;
+          let isDrawingFrame = false;
           const drawFrame = () => {
+              if (isDrawingFrame) return;
               if (!this.canvasCtx || !this.displayVideoEle || !this.canvasEle) return;
               
-              this.canvasCtx.drawImage(this.displayVideoEle, 0, 0, this.canvasEle.width, this.canvasEle.height);
-              
-              if (this.isCameraEnabled() && camVideoEl && camVideoEl.readyState >= 2) {
-                  const relX = this.cameraPos().x / window.innerWidth;
-                  const relY = this.cameraPos().y / window.innerHeight;
-                  const scale = this.canvasEle.height / window.innerHeight;
-                  const camRadius = 60 * scale; 
+              isDrawingFrame = true;
+              try {
+                  // Render the display background
+                  this.canvasCtx.drawImage(this.displayVideoEle, 0, 0, this.canvasEle.width, this.canvasEle.height);
                   
-                  let x = relX * this.canvasEle.width;
-                  let y = relY * this.canvasEle.height;
-                  
-                  x = Math.max(camRadius, Math.min(x + camRadius, this.canvasEle.width - camRadius)) - camRadius;
-                  y = Math.max(camRadius, Math.min(y + camRadius, this.canvasEle.height - camRadius)) - camRadius;
-                  
-                  this.canvasCtx.save();
-                  this.canvasCtx.beginPath();
-                  this.canvasCtx.arc(x + camRadius, y + camRadius, camRadius, 0, Math.PI * 2);
-                  this.canvasCtx.closePath();
-                  this.canvasCtx.clip();
-                  
-                  const vW = camVideoEl.videoWidth;
-                  const vH = camVideoEl.videoHeight;
-                  const aspect = vW / vH;
-                  const targetSize = camRadius * 2;
-                  let sW = vW;
-                  let sH = vH;
-                  if (aspect > 1) { 
-                      sW = vH; 
-                  } else {
-                      sH = vW;
-                  }
-                  
-                  this.canvasCtx.translate(x + targetSize/2, y + targetSize/2);
-                  this.canvasCtx.scale(-1, 1);
-                  this.canvasCtx.translate(-(x + targetSize/2), -(y + targetSize/2));
+                  const camVideoEl = document.getElementById('camPreview') as HTMLVideoElement;
+                  if (this.isCameraEnabled() && camVideoEl && camVideoEl.readyState >= 2) {
+                      // Bypassing Layout thrashing/reflow queries
+                      const windowW = this.cachedWindowWidth || 1920;
+                      const windowH = this.cachedWindowHeight || 1080;
+                      
+                      const relX = this.cameraPos().x / windowW;
+                      const relY = this.cameraPos().y / windowH;
+                      const scale = this.canvasEle.height / windowH;
+                      const camRadius = 60 * scale; 
+                      
+                      let x = relX * this.canvasEle.width;
+                      let y = relY * this.canvasEle.height;
+                      
+                      x = Math.max(camRadius, Math.min(x + camRadius, this.canvasEle.width - camRadius)) - camRadius;
+                      y = Math.max(camRadius, Math.min(y + camRadius, this.canvasEle.height - camRadius)) - camRadius;
+                      
+                      this.canvasCtx.save();
+                      this.canvasCtx.beginPath();
+                      this.canvasCtx.arc(x + camRadius, y + camRadius, camRadius, 0, Math.PI * 2);
+                      this.canvasCtx.closePath();
+                      this.canvasCtx.clip();
+                      
+                      const vW = camVideoEl.videoWidth;
+                      const vH = camVideoEl.videoHeight;
+                      const aspect = vW / vH;
+                      const targetSize = camRadius * 2;
+                      let sW = vW;
+                      let sH = vH;
+                      if (aspect > 1) { 
+                          sW = vH; 
+                      } else {
+                          sH = vW;
+                      }
+                      
+                      this.canvasCtx.translate(x + targetSize/2, y + targetSize/2);
+                      this.canvasCtx.scale(-1, 1);
+                      this.canvasCtx.translate(-(x + targetSize/2), -(y + targetSize/2));
 
-                  this.canvasCtx.drawImage(
-                      camVideoEl,
-                      (vW - sW) / 2, (vH - sH) / 2, sW, sH,
-                      x, y, targetSize, targetSize
-                  );
-                  
-                  this.canvasCtx.restore();
-                  
-                  this.canvasCtx.save();
-                  this.canvasCtx.beginPath();
-                  this.canvasCtx.arc(x + camRadius, y + camRadius, camRadius, 0, Math.PI * 2);
-                  this.canvasCtx.lineWidth = 4;
-                  this.canvasCtx.strokeStyle = 'rgba(16, 185, 129, 0.8)';
-                  this.canvasCtx.stroke();
-                  this.canvasCtx.restore();
+                      this.canvasCtx.drawImage(
+                          camVideoEl,
+                          (vW - sW) / 2, (vH - sH) / 2, sW, sH,
+                          x, y, targetSize, targetSize
+                      );
+                      
+                      this.canvasCtx.restore();
+                      
+                      this.canvasCtx.save();
+                      this.canvasCtx.beginPath();
+                      this.canvasCtx.arc(x + camRadius, y + camRadius, camRadius, 0, Math.PI * 2);
+                      this.canvasCtx.lineWidth = 4;
+                      this.canvasCtx.strokeStyle = 'rgba(16, 185, 129, 0.8)';
+                      this.canvasCtx.stroke();
+                      this.canvasCtx.restore();
+                  }
+              } catch {
+                  // Guard against crashing during recording cycles
+              } finally {
+                  isDrawingFrame = false;
               }
           };
           this.mixFrameId = window.setInterval(drawFrame, 1000 / 30);
