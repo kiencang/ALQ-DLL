@@ -7,13 +7,27 @@ import { ChangeDetectionStrategy, Component, computed, signal, OnDestroy, OnInit
   templateUrl: './app.html',
   styleUrl: './app.css',
   host: {
-    '(window:keydown)': 'handleKeydown($event)'
+    '(window:keydown)': 'handleKeydown($event)',
+    '(window:mousemove)': 'handleMouseMove($event)',
+    '(window:mouseup)': 'handleMouseUp($event)'
   }
 })
 export class App implements OnDestroy, OnInit {
+  isCameraEnabled = signal(false);
+  cameraStream = signal<MediaStream | null>(null);
+  cameraPos = signal({ x: 20, y: 0 });
+  isDraggingCam = false;
+  dragStart = { x: 0, y: 0 };
+  dragInitialPos = { x: 0, y: 0 };
+  
+  private displayVideoEle: HTMLVideoElement | null = null;
+  private canvasEle: HTMLCanvasElement | null = null;
+  private canvasCtx: CanvasRenderingContext2D | null = null;
+  private mixFrameId: number | null = null;
+
   isRecording = signal(false);
   isCountingDown = signal(false);
-  countdownValue = signal(5);
+  countdownValue = signal<number | string>(5);
   recordingTime = signal(0);
   errorMessage = signal('');
   showSuccessToast = signal(false);
@@ -36,8 +50,19 @@ export class App implements OnDestroy, OnInit {
   private animationFrameId: number | null = null;
 
   async ngOnInit() {
+      if (typeof window !== 'undefined') {
+          this.cameraPos.set({ x: 20, y: window.innerHeight - 200 }); // default pos
+      }
       if (typeof navigator !== 'undefined' && navigator.mediaDevices) {
           try {
+             // Request initial access to both audio and video to trigger the browser's unified permission prompt
+             try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true });
+                stream.getTracks().forEach(t => t.stop());
+             } catch (e) {
+                // Ignore if user denies or devices missing initially
+             }
+
              if (navigator.mediaDevices.addEventListener) {
                  navigator.mediaDevices.addEventListener('devicechange', () => this.checkMicStatus());
              }
@@ -51,6 +76,10 @@ export class App implements OnDestroy, OnInit {
                  } catch (e) {
                      // Safari sometimes doesn't support 'microphone' in permissions API
                  }
+                 try {
+                     const camPerm = await navigator.permissions.query({ name: 'camera' as any });
+                     // We can track camera permission separately if needed
+                 } catch (e) {}
              }
           } catch (e) {
               // Ignore securely
@@ -97,6 +126,53 @@ export class App implements OnDestroy, OnInit {
        event.preventDefault();
        this.toggleRecording();
     }
+  }
+
+  handleCameraDragStart(event: MouseEvent) {
+      if (this.isRecording() || this.isCountingDown()) return;
+      this.isDraggingCam = true;
+      this.dragStart = { x: event.clientX, y: event.clientY };
+      this.dragInitialPos = { ...this.cameraPos() };
+      event.preventDefault();
+  }
+
+  handleMouseMove(event: MouseEvent) {
+      if (!this.isDraggingCam) return;
+      const dx = event.clientX - this.dragStart.x;
+      const dy = event.clientY - this.dragStart.y;
+      this.cameraPos.set({ 
+          x: this.dragInitialPos.x + dx, 
+          y: this.dragInitialPos.y + dy 
+      });
+  }
+
+  handleMouseUp(event: MouseEvent) {
+      this.isDraggingCam = false;
+  }
+
+  async toggleCamera() {
+      if (this.isCameraEnabled()) {
+          this.cameraStream()?.getTracks().forEach(t => t.stop());
+          this.cameraStream.set(null);
+          this.isCameraEnabled.set(false);
+      } else {
+          try {
+              const stream = await navigator.mediaDevices.getUserMedia({ 
+                  video: { width: 480, height: 480, facingMode: 'user' } 
+              });
+              this.cameraStream.set(stream);
+              this.isCameraEnabled.set(true);
+              
+              // Cập nhật lại srcObject sau khi view render
+              setTimeout(() => {
+                  const videoEle = document.getElementById('camPreview') as HTMLVideoElement;
+                  if (videoEle) videoEle.srcObject = stream;
+              }, 50);
+          } catch (e) {
+              this.errorMessage.set('Không thể bật Camera. Vui lòng cấp quyền.');
+              setTimeout(() => this.errorMessage.set(''), 5000);
+          }
+      }
   }
 
   async startRecording() {
@@ -151,9 +227,90 @@ export class App implements OnDestroy, OnInit {
       }
 
       // 4. Gom Video và Audio đã Mix thành một MediaStream duy nhất
-      const tracks: MediaStreamTrack[] = [
-          ...this.displayStream.getVideoTracks()
-      ];
+      let videoTracks = this.displayStream.getVideoTracks();
+      
+      if (this.isCameraEnabled() && this.cameraStream()) {
+          this.displayVideoEle = document.createElement('video');
+          this.displayVideoEle.muted = true;
+          this.displayVideoEle.autoplay = true;
+          this.displayVideoEle.playsInline = true;
+          
+          this.displayVideoEle.srcObject = this.displayStream;
+          
+          await new Promise<void>((resolve) => {
+              this.displayVideoEle!.onloadedmetadata = () => {
+                  this.displayVideoEle!.play();
+                  this.canvasEle = document.createElement('canvas');
+                  
+                  this.canvasEle.width = this.displayVideoEle!.videoWidth;
+                  this.canvasEle.height = this.displayVideoEle!.videoHeight;
+                  this.canvasCtx = this.canvasEle!.getContext('2d');
+                  resolve();
+              };
+          });
+
+          const camVideoEl = document.getElementById('camPreview') as HTMLVideoElement;
+          const drawFrame = () => {
+              if (!this.canvasCtx || !this.displayVideoEle || !this.canvasEle) return;
+              
+              this.canvasCtx.drawImage(this.displayVideoEle, 0, 0, this.canvasEle.width, this.canvasEle.height);
+              
+              if (this.isCameraEnabled() && camVideoEl && camVideoEl.readyState >= 2) {
+                  const relX = this.cameraPos().x / window.innerWidth;
+                  const relY = this.cameraPos().y / window.innerHeight;
+                  const scale = this.canvasEle.height / window.innerHeight;
+                  const camRadius = 60 * scale; 
+                  
+                  let x = relX * this.canvasEle.width;
+                  let y = relY * this.canvasEle.height;
+                  
+                  x = Math.max(camRadius, Math.min(x + camRadius, this.canvasEle.width - camRadius)) - camRadius;
+                  y = Math.max(camRadius, Math.min(y + camRadius, this.canvasEle.height - camRadius)) - camRadius;
+                  
+                  this.canvasCtx.save();
+                  this.canvasCtx.beginPath();
+                  this.canvasCtx.arc(x + camRadius, y + camRadius, camRadius, 0, Math.PI * 2);
+                  this.canvasCtx.closePath();
+                  this.canvasCtx.clip();
+                  
+                  const vW = camVideoEl.videoWidth;
+                  const vH = camVideoEl.videoHeight;
+                  const aspect = vW / vH;
+                  const targetSize = camRadius * 2;
+                  let sW = vW;
+                  let sH = vH;
+                  if (aspect > 1) { 
+                      sW = vH; 
+                  } else {
+                      sH = vW;
+                  }
+                  
+                  this.canvasCtx.translate(x + targetSize/2, y + targetSize/2);
+                  this.canvasCtx.scale(-1, 1);
+                  this.canvasCtx.translate(-(x + targetSize/2), -(y + targetSize/2));
+
+                  this.canvasCtx.drawImage(
+                      camVideoEl,
+                      (vW - sW) / 2, (vH - sH) / 2, sW, sH,
+                      x, y, targetSize, targetSize
+                  );
+                  
+                  this.canvasCtx.restore();
+                  
+                  this.canvasCtx.save();
+                  this.canvasCtx.beginPath();
+                  this.canvasCtx.arc(x + camRadius, y + camRadius, camRadius, 0, Math.PI * 2);
+                  this.canvasCtx.lineWidth = 4;
+                  this.canvasCtx.strokeStyle = 'rgba(16, 185, 129, 0.8)';
+                  this.canvasCtx.stroke();
+                  this.canvasCtx.restore();
+              }
+          };
+          this.mixFrameId = window.setInterval(drawFrame, 1000 / 60);
+          videoTracks = this.canvasEle!.captureStream(60).getVideoTracks();
+      }
+
+      const tracks: MediaStreamTrack[] = [...videoTracks];
       
       // Chỉ gắn track audio nếu có ít nhất một nguồn âm thanh
       if (hasAudio) {
@@ -199,20 +356,22 @@ export class App implements OnDestroy, OnInit {
 
       this.countdownTimerInterval = setInterval(() => {
           const current = this.countdownValue();
-          if (current > 1) {
+          if (typeof current === 'number' && current > 1) {
               this.countdownValue.set(current - 1);
           } else {
               if (this.countdownTimerInterval !== null) {
                   clearInterval(this.countdownTimerInterval);
                   this.countdownTimerInterval = null;
               }
-              this.isCountingDown.set(false);
+              // Chuyển sang giai đoạn hiệu lệnh âm thanh
+              this.countdownValue.set('ACTION!');
               
               const startRecordingAction = () => {
                   // Cắt file 1 giây 1 lần để nhồi dữ liệu (an toàn hơn cho video dài)
                   this.mediaRecorder!.start(1000); 
   
                   this.isRecording.set(true);
+                  this.isCountingDown.set(false); // Chỉ ẩn màn hình đếm ngược khi quá trình ghi thực sự bắt đầu
                   this.recordingTime.set(0);
                   this.timerInterval = setInterval(() => {
                       this.recordingTime.update(t => t + 1);
@@ -318,12 +477,30 @@ export class App implements OnDestroy, OnInit {
   }
 
   private cleanupStreams() {
+      if (this.mixFrameId !== null) {
+          window.clearInterval(this.mixFrameId);
+          this.mixFrameId = null;
+      }
+      if (this.displayVideoEle) {
+          this.displayVideoEle.pause();
+          this.displayVideoEle.srcObject = null;
+          this.displayVideoEle = null;
+      }
+      this.canvasEle = null;
+      this.canvasCtx = null;
+
       if (this.animationFrameId !== null) {
           cancelAnimationFrame(this.animationFrameId);
           this.animationFrameId = null;
       }
       this.audioLevels.set([15, 15, 15, 15, 15, 15, 15, 15, 15, 15]);
 
+      if (this.cameraStream()) {
+          this.cameraStream()!.getTracks().forEach(t => t.stop());
+          this.cameraStream.set(null);
+          this.isCameraEnabled.set(false);
+      }
+      
       if (this.displayStream) {
           this.displayStream.getTracks().forEach(t => t.stop());
           this.displayStream = null;
