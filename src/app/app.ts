@@ -43,6 +43,8 @@ export class App implements OnDestroy, OnInit {
   
   qualityPreset = signal<'high' | 'medium' | 'low'>('high');
   tempQualityPreset = signal<'high' | 'medium' | 'low'>('high');
+  cameraSize = signal<number>(120);
+  tempCameraSize = signal<number>(120);
   showSettingsModal = signal(false);
 
   hasMicDevice = signal<boolean | null>(null);
@@ -75,15 +77,22 @@ export class App implements OnDestroy, OnInit {
 
   openSettingsModal() {
       this.tempQualityPreset.set(this.qualityPreset());
+      this.tempCameraSize.set(this.cameraSize());
       this.showSettingsModal.set(true);
   }
 
   saveSettings() {
       this.qualityPreset.set(this.tempQualityPreset());
+      this.cameraSize.set(this.tempCameraSize());
       this.showSettingsModal.set(false);
       this.successMessage.set('Đã lưu cài đặt thành công!');
       this.showSuccessToast.set(true);
       setTimeout(() => this.showSuccessToast.set(false), 5000);
+  }
+
+  updateCameraSize(event: Event) {
+      const input = event.target as HTMLInputElement;
+      this.tempCameraSize.set(Number(input.value));
   }
 
   async ngOnInit() {
@@ -382,7 +391,7 @@ export class App implements OnDestroy, OnInit {
                       const relX = this.cameraPos().x / windowW;
                       const relY = this.cameraPos().y / windowH;
                       const scale = this.canvasEle.height / windowH;
-                      const camRadius = 60 * scale; 
+                      const camRadius = (this.cameraSize() / 2) * scale; 
                       
                       let x = relX * this.canvasEle.width;
                       let y = relY * this.canvasEle.height;
@@ -423,7 +432,7 @@ export class App implements OnDestroy, OnInit {
                       this.canvasCtx.save();
                       this.canvasCtx.beginPath();
                       this.canvasCtx.arc(x + camRadius, y + camRadius, camRadius, 0, Math.PI * 2);
-                      this.canvasCtx.lineWidth = 4;
+                      this.canvasCtx.lineWidth = 2 * scale;
                       this.canvasCtx.strokeStyle = 'rgba(16, 185, 129, 0.8)';
                       this.canvasCtx.stroke();
                       this.canvasCtx.restore();
