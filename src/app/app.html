@@ -92,19 +92,15 @@
         </div>
       } @else {
          <div class="flex flex-col items-center space-y-2 pointer-events-none select-none">
-           <p class="text-slate-400 font-medium tracking-[0.2em] text-xs uppercase px-5 py-2 rounded-full bg-slate-800/40 border border-slate-700/50 shadow-inner">
-             ẤN LÀ QUAY • DỪNG LÀ LƯU
-           </p>
-
            <div 
               class="flex items-center space-x-3 mt-4 pointer-events-auto transition-all duration-200"
-              [class.opacity-40]="recordingAttempted() && (hasCameraDevice() === false || cameraPermission() === 'denied')"
-              [attr.title]="(recordingAttempted() && (hasCameraDevice() === false || cameraPermission() === 'denied')) ? 'Camera không khả dụng hoặc bị chặn' : null"
+              [class.opacity-40]="cameraError() !== null"
+              [attr.title]="cameraError()"
             >
              <span class="text-slate-400 text-sm font-medium tracking-wide">Bật Camera</span>
              <button 
                (click)="toggleCamera()"
-               [disabled]="isRecording() || isCountingDown() || (recordingAttempted() && (hasCameraDevice() === false || cameraPermission() === 'denied'))"
+               [disabled]="isRecording() || isCountingDown()"
                class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                [class.bg-emerald-500]="isCameraEnabled()"
                [class.bg-slate-700]="!isCameraEnabled()"
@@ -117,26 +113,34 @@
              </button>
            </div>
 
-           @if (recordingAttempted()) {
-            <div class="flex flex-wrap items-center justify-center gap-2 mt-2 pointer-events-auto select-none">
-            @if (hasMicDevice() === false || micPermission() === 'denied') {
-             <div class="flex items-center space-x-1.5 text-orange-400 bg-orange-500/10 px-3 py-1.5 rounded-full text-xs font-medium border border-orange-500/20">
-               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4">
-                 <path fill-rule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003zM12 8.25a.75.75 0 0 1 .75.75v3.75a.75.75 0 0 1-1.5 0V9a.75.75 0 0 1 .75-.75zm0 8.25a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5z" clip-rule="evenodd" />
-               </svg>
-               <span>Micro không khả dụng hoặc bị chặn</span>
+           <button (click)="openSettingsModal()" class="flex items-center space-x-2 mt-4 text-slate-400 hover:text-slate-200 bg-slate-800/40 hover:bg-slate-800/80 px-4 py-2 rounded-full transition-colors pointer-events-auto border border-slate-700/50" aria-label="Cài đặt chất lượng video">
+             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4">
+               <path stroke-linecap="round" stroke-linejoin="round" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 0 1 1.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.56.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.893.149c-.425.07-.765.383-.93.78-.165.398-.143.854-.107 1.204l.527.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 0 1-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.397.165-.71.505-.781.929l-.149.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 0 1-.12-1.45l.527-.737c.25-.35.273-.806.108-1.204-.165-.397-.505-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.107-1.204l-.527-.738a1.125 1.125 0 0 1 .12-1.45l.773-.773a1.125 1.125 0 0 1 1.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.929l.15-.894Z" />
+               <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+             </svg>
+             <span class="text-xs font-medium uppercase tracking-widest">Cài đặt</span>
+           </button>
+
+           @if (recordingAttempted() && (hasMicDevice() === false || micPermission() === 'denied')) {
+             <div class="flex flex-wrap items-center justify-center gap-2 mt-2 pointer-events-auto select-none">
+              <div class="flex items-center space-x-1.5 text-orange-400 bg-orange-500/10 px-3 py-1.5 rounded-full text-xs font-medium border border-orange-500/20">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4">
+                  <path fill-rule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003zM12 8.25a.75.75 0 0 1 .75.75v3.75a.75.75 0 0 1-1.5 0V9a.75.75 0 0 1 .75-.75zm0 8.25a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5z" clip-rule="evenodd" />
+                </svg>
+                <span>Micro không khả dụng hoặc bị chặn</span>
+              </div>
              </div>
            }
 
-           @if (hasCameraDevice() === false || cameraPermission() === 'denied') {
-             <div class="flex items-center space-x-1.5 text-rose-400 bg-rose-500/10 px-3 py-1.5 rounded-full text-xs font-medium border border-rose-500/20">
-               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 text-rose-400">
-                 <path fill-rule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003zM12 8.25a.75.75 0 0 1 .75.75v3.75a.75.75 0 0 1-1.5 0V9a.75.75 0 0 1 .75-.75zm0 8.25a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5z" clip-rule="evenodd" />
-               </svg>
-               <span>Camera không khả dụng hoặc bị chặn</span>
+           @if (cameraError()) {
+             <div class="flex flex-wrap items-center justify-center gap-2 mt-2 pointer-events-auto select-none">
+              <div class="flex items-center space-x-1.5 text-rose-400 bg-rose-500/10 px-3 py-1.5 rounded-full text-xs font-medium border border-rose-500/20">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4 text-rose-400">
+                  <path fill-rule="evenodd" d="M9.401 3.003c1.155-2 4.043-2 5.197 0l7.355 12.748c1.154 2-.29 4.5-2.599 4.5H4.645c-2.309 0-3.752-2.5-2.598-4.5L9.4 3.003zM12 8.25a.75.75 0 0 1 .75.75v3.75a.75.75 0 0 1-1.5 0V9a.75.75 0 0 1 .75-.75zm0 8.25a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5z" clip-rule="evenodd" />
+                </svg>
+                <span>{{ cameraError() }}</span>
               </div>
-            }
-            </div>
+             </div>
            }
           </div>
        }
@@ -146,7 +150,7 @@
    <!-- Footer -->
   <footer class="absolute bottom-6 text-center w-full">
     <p class="text-[10px] text-slate-400/90 font-light tracking-widest uppercase flex items-center justify-center gap-1.5 flex-wrap">
-      <span>v1.0.14</span>
+      <span>ALQ-DLL &bull; v1.0.15</span>
       <span>&bull;</span>
       <a href="https://github.com/kiencang/ALQ-DLL" target="_blank" rel="noopener noreferrer" class="hover:text-slate-200 transition-colors cursor-pointer">GitHub</a>
       <span>&bull;</span>
@@ -256,6 +260,89 @@
               </p>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Settings Modal -->
+  @if (showSettingsModal()) {
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-[#0F172A]/85 backdrop-blur-sm transition-all p-4">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col">
+        <!-- Header -->
+        <div class="px-6 py-4 border-b border-slate-800 flex justify-between items-center bg-slate-900/50">
+          <h2 class="text-lg font-semibold text-slate-100 flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 text-slate-400">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M10.343 3.94c.09-.542.56-.94 1.11-.94h1.093c.55 0 1.02.398 1.11.94l.149.894c.07.424.384.764.78.93.398.164.855.142 1.205-.108l.737-.527a1.125 1.125 0 011.45.12l.773.774c.39.389.44 1.002.12 1.45l-.527.737c-.25.35-.272.806-.107 1.204.165.397.505.71.93.78l.893.15c.543.09.94.56.94 1.109v1.094c0 .55-.397 1.02-.94 1.11l-.893.149c-.425.07-.765.383-.93.78-.165.398-.143.854.107 1.204l.527.738c.32.447.269 1.06-.12 1.45l-.774.773a1.125 1.125 0 01-1.449.12l-.738-.527c-.35-.25-.806-.272-1.203-.107-.397.165-.71.505-.781.929l-.149.894c-.09.542-.56.94-1.11.94h-1.094c-.55 0-1.019-.398-1.11-.94l-.148-.894c-.071-.424-.384-.764-.781-.93-.398-.164-.854-.142-1.204.108l-.738.527c-.447.32-1.06.269-1.45-.12l-.773-.774a1.125 1.125 0 01-.12-1.45l.527-.737c.25-.35.273-.806.108-1.204-.165-.397-.505-.71-.93-.78l-.894-.15c-.542-.09-.94-.56-.94-1.109v-1.094c0-.55.398-1.02.94-1.11l.894-.149c.424-.07.765-.383.93-.78.165-.398.143-.854-.107-1.204l-.527-.738a1.125 1.125 0 01.12-1.45l.773-.773a1.125 1.125 0 011.45-.12l.737.527c.35.25.807.272 1.204.107.397-.165.71-.505.78-.929l.15-.894z" />
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            Cài đặt chất lượng
+          </h2>
+          <button (click)="showSettingsModal.set(false)" class="text-slate-400 hover:text-white transition-colors p-1 rounded hover:bg-slate-800">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+        
+        <!-- Content -->
+        <div class="px-6 py-5 overflow-y-auto w-full flex-1">
+          <div class="space-y-4">
+            <label class="flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors"
+                [class.bg-slate-800]="tempQualityPreset() === 'high'" [class.border-emerald-500]="tempQualityPreset() === 'high'"
+                [class.bg-slate-800/40]="tempQualityPreset() !== 'high'" [class.border-slate-700]="tempQualityPreset() !== 'high'"
+                [class.hover:border-slate-600]="tempQualityPreset() !== 'high'">
+              <div>
+                <div class="font-medium text-slate-200">Cao (Mặc định)</div>
+                <div class="text-xs text-slate-400 mt-1">Video: 8 Mbps, Audio: 320 kbps</div>
+              </div>
+              <input type="radio" name="quality" value="high" [checked]="tempQualityPreset() === 'high'" (change)="setQualityPreset('high')" class="hidden">
+              @if (tempQualityPreset() === 'high') {
+                <div class="w-4 h-4 rounded-full bg-emerald-500 border-[3px] border-slate-900 shadow-[0_0_0_1px_rgba(16,185,129,1)]"></div>
+              } @else {
+                <div class="w-4 h-4 rounded-full border border-slate-500"></div>
+              }
+            </label>
+
+            <label class="flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors"
+                [class.bg-slate-800]="tempQualityPreset() === 'medium'" [class.border-emerald-500]="tempQualityPreset() === 'medium'"
+                [class.bg-slate-800/40]="tempQualityPreset() !== 'medium'" [class.border-slate-700]="tempQualityPreset() !== 'medium'"
+                [class.hover:border-slate-600]="tempQualityPreset() !== 'medium'">
+              <div>
+                <div class="font-medium text-slate-200">Trung bình</div>
+                <div class="text-xs text-slate-400 mt-1">Video: 4 Mbps, Audio: 128 kbps</div>
+              </div>
+              <input type="radio" name="quality" value="medium" [checked]="tempQualityPreset() === 'medium'" (change)="setQualityPreset('medium')" class="hidden">
+              @if (tempQualityPreset() === 'medium') {
+                <div class="w-4 h-4 rounded-full bg-emerald-500 border-[3px] border-slate-900 shadow-[0_0_0_1px_rgba(16,185,129,1)]"></div>
+              } @else {
+                <div class="w-4 h-4 rounded-full border border-slate-500"></div>
+              }
+            </label>
+
+            <label class="flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors"
+                [class.bg-slate-800]="tempQualityPreset() === 'low'" [class.border-emerald-500]="tempQualityPreset() === 'low'"
+                [class.bg-slate-800/40]="tempQualityPreset() !== 'low'" [class.border-slate-700]="tempQualityPreset() !== 'low'"
+                [class.hover:border-slate-600]="tempQualityPreset() !== 'low'">
+              <div>
+                <div class="font-medium text-slate-200">Thấp</div>
+                <div class="text-xs text-slate-400 mt-1">Video: 2 Mbps, Audio: 64 kbps</div>
+              </div>
+              <input type="radio" name="quality" value="low" [checked]="tempQualityPreset() === 'low'" (change)="setQualityPreset('low')" class="hidden">
+              @if (tempQualityPreset() === 'low') {
+                <div class="w-4 h-4 rounded-full bg-emerald-500 border-[3px] border-slate-900 shadow-[0_0_0_1px_rgba(16,185,129,1)]"></div>
+              } @else {
+                <div class="w-4 h-4 rounded-full border border-slate-500"></div>
+              }
+            </label>
+          </div>
+        </div>
+        
+        <!-- Footer / Save Button -->
+        <div class="px-6 py-4 border-t border-slate-800 bg-slate-900/50">
+          <button (click)="saveSettings()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2.5 rounded-lg transition-colors flex items-center justify-center gap-2">
+            Lưu cài đặt
+          </button>
         </div>
       </div>
     </div>

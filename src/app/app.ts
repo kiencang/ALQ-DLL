@@ -41,10 +41,16 @@ export class App implements OnDestroy, OnInit {
   timerInterval: ReturnType<typeof setInterval> | null = null;
   countdownTimerInterval: ReturnType<typeof setInterval> | null = null;
   
+  qualityPreset = signal<'high' | 'medium' | 'low'>('high');
+  tempQualityPreset = signal<'high' | 'medium' | 'low'>('high');
+  showSettingsModal = signal(false);
+
   hasMicDevice = signal<boolean | null>(null);
+
   micPermission = signal<string | null>(null);
   hasCameraDevice = signal<boolean | null>(null);
   cameraPermission = signal<string | null>(null);
+  cameraError = signal<string | null>(null);
   recordingAttempted = signal(false);
 
   private mediaRecorder: MediaRecorder | null = null;
@@ -61,6 +67,23 @@ export class App implements OnDestroy, OnInit {
           this.cachedWindowWidth = window.innerWidth;
           this.cachedWindowHeight = window.innerHeight;
       }
+  }
+
+  setQualityPreset(preset: 'high' | 'medium' | 'low') {
+      this.tempQualityPreset.set(preset);
+  }
+
+  openSettingsModal() {
+      this.tempQualityPreset.set(this.qualityPreset());
+      this.showSettingsModal.set(true);
+  }
+
+  saveSettings() {
+      this.qualityPreset.set(this.tempQualityPreset());
+      this.showSettingsModal.set(false);
+      this.successMessage.set('Đã lưu cài đặt thành công!');
+      this.showSuccessToast.set(true);
+      setTimeout(() => this.showSuccessToast.set(false), 5000);
   }
 
   async ngOnInit() {
@@ -189,11 +212,11 @@ export class App implements OnDestroy, OnInit {
   }
 
   async toggleCamera() {
-      this.recordingAttempted.set(true);
       if (this.isCameraEnabled()) {
           this.cameraStream()?.getTracks().forEach(t => t.stop());
           this.cameraStream.set(null);
           this.isCameraEnabled.set(false);
+          this.cameraError.set(null);
       } else {
           try {
               const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -207,6 +230,7 @@ export class App implements OnDestroy, OnInit {
               this.cameraStream.set(stream);
               this.isCameraEnabled.set(true);
               this.cameraPermission.set('granted');
+              this.cameraError.set(null);
               this.checkCameraStatus();
               
               // Cập nhật lại srcObject sau khi view render
@@ -219,6 +243,7 @@ export class App implements OnDestroy, OnInit {
               if (errorName === 'NotAllowedError' || errorName === 'PermissionDeniedError') {
                   this.cameraPermission.set('denied');
               }
+              this.cameraError.set('Camera không khả dụng hoặc bị chặn');
               this.checkCameraStatus();
           }
       }
@@ -437,8 +462,20 @@ export class App implements OnDestroy, OnInit {
         'video/webm'
       ];
       
+      let videoBitsPerSecond = 8000000;
+      let audioBitsPerSecond = 320000;
+      
+      const preset = this.qualityPreset();
+      if (preset === 'medium') {
+          videoBitsPerSecond = 4000000;
+          audioBitsPerSecond = 128000;
+      } else if (preset === 'low') {
+          videoBitsPerSecond = 2000000;
+          audioBitsPerSecond = 64000;
+      }
+
       const mimeType = types.find(type => MediaRecorder.isTypeSupported(type)) || '';
-      const options = mimeType ? { mimeType, videoBitsPerSecond: 8000000, audioBitsPerSecond: 320000 } : { videoBitsPerSecond: 8000000, audioBitsPerSecond: 320000 };
+      const options = mimeType ? { mimeType, videoBitsPerSecond, audioBitsPerSecond } : { videoBitsPerSecond, audioBitsPerSecond };
       
       this.mediaRecorder = new MediaRecorder(this.combinedStream, options);
 
