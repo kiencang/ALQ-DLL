@@ -430,10 +430,10 @@ export class App implements OnDestroy, OnInit {
       const preset = this.qualityPreset();
       if (preset === 'medium') {
           videoBitsPerSecond = 4000000;
-          audioBitsPerSecond = 128000;
+          audioBitsPerSecond = 192000;
       } else if (preset === 'low') {
           videoBitsPerSecond = 2000000;
-          audioBitsPerSecond = 64000;
+          audioBitsPerSecond = 128000;
       }
 
       const mimeType = types.find(type => MediaRecorder.isTypeSupported(type)) || '';

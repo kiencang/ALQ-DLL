@@ -49,7 +49,7 @@ import { ChangeDetectionStrategy, Component, model, output } from '@angular/core
                   [class.hover:border-slate-600]="tempQualityPreset() !== 'medium'">
                 <div>
                   <div class="font-medium text-slate-200 border-none select-none">Trung bình (Mặc định)</div>
-                  <div class="text-xs text-slate-400 mt-1">Video: 4 Mbps, Audio: 128 kbps</div>
+                  <div class="text-xs text-slate-400 mt-1">Video: 4 Mbps, Audio: 192 kbps</div>
                 </div>
                 <input type="radio" name="quality" value="medium" [checked]="tempQualityPreset() === 'medium'" (change)="setQualityPreset('medium')" class="hidden">
                 @if (tempQualityPreset() === 'medium') {
@@ -65,7 +65,7 @@ import { ChangeDetectionStrategy, Component, model, output } from '@angular/core
                   [class.hover:border-slate-600]="tempQualityPreset() !== 'low'">
                 <div>
                   <div class="font-medium text-slate-200 border-none select-none">Thấp</div>
-                  <div class="text-xs text-slate-400 mt-1">Video: 2 Mbps, Audio: 64 kbps</div>
+                  <div class="text-xs text-slate-400 mt-1">Video: 2 Mbps, Audio: 128 kbps</div>
                 </div>
                 <input type="radio" name="quality" value="low" [checked]="tempQualityPreset() === 'low'" (change)="setQualityPreset('low')" class="hidden">
                 @if (tempQualityPreset() === 'low') {
